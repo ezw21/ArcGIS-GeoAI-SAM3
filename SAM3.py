@@ -366,7 +366,7 @@ class GeometryType:
     Polyline = 3
     Polygon = 4
     
-class SAM:
+class SAM3:
     def __init__(self):
         self.name = "Segment Anything Model"
         self.description = "This python raster function applies computer vision to segment anything"
@@ -904,3 +904,7 @@ class SAM:
                 f"vectorize: output_features={len(features['features'])}",
             )
         return {"output_vectors": json.dumps(features)}
+
+
+class SAM(SAM3):
+    pass
