@@ -28,6 +28,15 @@ def _first_existing_file(paths):
     return None
 
 
+def _parse_text_prompts(prompt_text):
+    if prompt_text is None:
+        return []
+    if not isinstance(prompt_text, str):
+        prompt_text = str(prompt_text)
+    prompts = [prompt.strip() for prompt in prompt_text.split(",")]
+    return [prompt for prompt in prompts if prompt]
+
+
 def _resolve_local_sam3_checkpoint(json_info, model, model_as_file, prf_root_dir):
     search_roots = []
     if model_as_file:
@@ -564,7 +573,12 @@ class SAM:
                         score = float(score_val.cpu().item())
                     except Exception:
                         score = float(score_val)
-                    masks.append({"segmentation": seg, "area": area, "stability_score": score})
+                    masks.append({
+                        "segmentation": seg,
+                        "area": area,
+                        "stability_score": score,
+                        "class_name": self.current_text_prompt or "Segment",
+                    })
                 _append_debug_log(
                     getattr(self.processor, "debug_log_path", None),
                     f"adapter.generate: returned_masks={len(masks)}",
@@ -777,78 +791,84 @@ class SAM:
         
         mask_list = []
         score_list = []
+        class_list = []
         max_mask_area_ratio = 0.98 if self.padding > 0 else 1.0
+        prompt_labels = _parse_text_prompts(self.text_prompt)
+        if not prompt_labels:
+            prompt_labels = [None]
         
         # set SAM model parameters to user defined values
         self.mask_generator.points_per_batch = self.points_per_batch
         self.mask_generator.min_mask_region_area = self.min_mask_region_area
         self.mask_generator.stability_score_thresh = self.stability_score_thresh
         self.mask_generator.box_nms_thresh = self.box_nms_thresh
-        if hasattr(self.mask_generator, 'set_text_prompt'):
-            self.mask_generator.set_text_prompt(self.text_prompt or None)
         
         # iterate over batch and get segment from model
         for batch_idx,input_pixels in enumerate(batch):
             side = int(math.sqrt(self.batch_size))
             i, j = batch_idx // side, batch_idx % side
             input_pixels = np.moveaxis(input_pixels,0,-1)
-            _append_debug_log(
-                self.debug_log_path,
-                f"vectorize: batch_idx={batch_idx}, tile_ij=({i},{j}), input_pixels_shape={tuple(input_pixels.shape)}, text_prompt={self.text_prompt!r}",
-            )
-            
-            # for input_pixels in batch:
-            masks = self.mask_generator.generate(input_pixels)
-            sorted_anns = sorted(masks, key=(lambda x: x['area']), reverse=True)
-            _append_debug_log(
-                self.debug_log_path,
-                f"vectorize: batch_idx={batch_idx}, sorted_masks={len(sorted_anns)}",
-            )
-            
-            for mask_value in sorted_anns:
-                # Reject only near-full-tile masks, which are usually padding artifacts.
-                area_ratio = mask_value['area'] / float(self.tytx * self.tytx)
-                if area_ratio < max_mask_area_ratio:
-                    try:
-                        masked_image = _prepare_binary_mask_for_cv(mask_value['segmentation'])
-                    except Exception as exc:
+            for prompt_label in prompt_labels:
+                if hasattr(self.mask_generator, 'set_text_prompt'):
+                    self.mask_generator.set_text_prompt(prompt_label)
+                _append_debug_log(
+                    self.debug_log_path,
+                    f"vectorize: batch_idx={batch_idx}, tile_ij=({i},{j}), input_pixels_shape={tuple(input_pixels.shape)}, text_prompt={prompt_label!r}",
+                )
+
+                masks = self.mask_generator.generate(input_pixels)
+                sorted_anns = sorted(masks, key=(lambda x: x['area']), reverse=True)
+                _append_debug_log(
+                    self.debug_log_path,
+                    f"vectorize: batch_idx={batch_idx}, prompt={prompt_label!r}, sorted_masks={len(sorted_anns)}",
+                )
+
+                for mask_value in sorted_anns:
+                    # Reject only near-full-tile masks, which are usually padding artifacts.
+                    area_ratio = mask_value['area'] / float(self.tytx * self.tytx)
+                    if area_ratio < max_mask_area_ratio:
+                        try:
+                            masked_image = _prepare_binary_mask_for_cv(mask_value['segmentation'])
+                        except Exception as exc:
+                            _append_debug_log(
+                                self.debug_log_path,
+                                f"vectorize: mask_prepare_failed type={type(mask_value['segmentation']).__name__}, error={exc}",
+                            )
+                            continue
+
                         _append_debug_log(
                             self.debug_log_path,
-                            f"vectorize: mask_prepare_failed type={type(mask_value['segmentation']).__name__}, error={exc}",
+                            f"vectorize: contour_input type={type(masked_image).__name__}, dtype={masked_image.dtype}, shape={masked_image.shape}, contiguous={bool(masked_image.flags['C_CONTIGUOUS'])}",
                         )
-                        continue
-
-                    _append_debug_log(
-                        self.debug_log_path,
-                        f"vectorize: contour_input type={type(masked_image).__name__}, dtype={masked_image.dtype}, shape={masked_image.shape}, contiguous={bool(masked_image.flags['C_CONTIGUOUS'])}",
-                    )
-                    rings = _mask_to_polygon_rings(
-                        masked_image,
-                        x_offset=j * self.tytx,
-                        y_offset=i * self.tytx,
-                    )
-                    if not rings:
-                        continue
-                    _append_debug_log(
-                        self.debug_log_path,
-                        f"vectorize: polygon_rings={len(rings)}, first_ring_points={len(rings[0])}, area_ratio={area_ratio:.4f}",
-                    )
-                    mask_list.append(rings)
-                    score_list.append(mask_value["stability_score"])
-                else:
-                    _append_debug_log(
-                        self.debug_log_path,
-                        f"vectorize: skipped_large_mask area_ratio={area_ratio:.4f}, threshold={max_mask_area_ratio:.4f}",
-                    )
+                        rings = _mask_to_polygon_rings(
+                            masked_image,
+                            x_offset=j * self.tytx,
+                            y_offset=i * self.tytx,
+                        )
+                        if not rings:
+                            continue
+                        _append_debug_log(
+                            self.debug_log_path,
+                            f"vectorize: polygon_rings={len(rings)}, first_ring_points={len(rings[0])}, area_ratio={area_ratio:.4f}, class_name={mask_value.get('class_name', 'Segment')}",
+                        )
+                        mask_list.append(rings)
+                        score_list.append(mask_value["stability_score"])
+                        class_list.append(mask_value.get("class_name", "Segment"))
+                    else:
+                        _append_debug_log(
+                            self.debug_log_path,
+                            f"vectorize: skipped_large_mask area_ratio={area_ratio:.4f}, threshold={max_mask_area_ratio:.4f}",
+                        )
                 
         n_rows = int(math.sqrt(self.batch_size))
         n_cols = int(math.sqrt(self.batch_size))
         padding = self.padding
         keep_masks = []
         keep_scores = []
+        keep_classes = []
         _append_debug_log(
             self.debug_log_path,
-            f"vectorize: contour_stage mask_list={len(mask_list)}, score_list={len(score_list)}",
+            f"vectorize: contour_stage mask_list={len(mask_list)}, score_list={len(score_list)}, class_list={len(class_list)}",
         )
        
         for idx, mask in enumerate(mask_list):
@@ -867,20 +887,22 @@ class SAM:
                 if in_center:
                     keep_masks.append(mask)
                     keep_scores.append(score_list[idx])
+                    keep_classes.append(class_list[idx])
         _append_debug_log(
             self.debug_log_path,
-            f"vectorize: keep_masks={len(keep_masks)}, keep_scores={len(keep_scores)}",
+            f"vectorize: keep_masks={len(keep_masks)}, keep_scores={len(keep_scores)}, keep_classes={len(keep_classes)}",
         )
             
         final_masks =  keep_masks
         pred_score = keep_scores 
+        pred_class = keep_classes
         features['features'] = []
         
         for mask_idx, final_mask in enumerate(final_masks):
             features['features'].append({
                 'attributes': {
                     'OID': mask_idx + 1,
-                    'Class': "Segment",
+                    'Class': pred_class[mask_idx],
                     'Confidence': pred_score[mask_idx]
                 },
                 'geometry': {

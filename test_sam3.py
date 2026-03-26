@@ -142,9 +142,19 @@ def build_union_mask(masks):
     mask_tensor = masks.detach()
     if mask_tensor.ndim == 4:
         mask_tensor = mask_tensor[:, 0, :, :]
-    mask_tensor = mask_tensor.to("cpu")
-    union_mask = (mask_tensor > 0).any(dim=0).to(torch.uint8).numpy() * 255
-    return union_mask
+
+    union_mask = None
+    for mask in mask_tensor:
+        mask_array = (mask.to("cpu") > 0).numpy()
+        if union_mask is None:
+            union_mask = mask_array
+        else:
+            union_mask |= mask_array
+
+    if union_mask is None:
+        return None
+
+    return union_mask.astype(np.uint8, copy=False) * 255
 
 
 def save_overlay(image, union_mask, overlay_path, mask_path, color):
@@ -213,7 +223,7 @@ def build_confidence_resolved_layers(image_size, prompt_results):
 
         confidence = float(result.get("confidence", 0.0))
         candidate_pixels = union_mask > 0
-        update_pixels = candidate_pixels & (confidence >= winner_confidence)
+        update_pixels = np.logical_and(candidate_pixels, confidence > winner_confidence)
         winner_confidence[update_pixels] = confidence
         winner_index[update_pixels] = prompt_index
 
