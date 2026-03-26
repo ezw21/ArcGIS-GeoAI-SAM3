@@ -496,21 +496,11 @@ class SAM:
         )
         _append_debug_log(self.debug_log_path, f"initialize: device_id={device_id}, checkpoint={checkpoint_path}")
         if checkpoint_path is None:
-            local_sam1_ckpt = _first_existing_file(
-                [
-                    os.path.join(prf_root_dir, "segment-anything", "models", "sam_vit_h_4b8939.pth"),
-                    os.path.join(prf_root_dir, "models", "sam_vit_h_4b8939.pth"),
-                ]
-            )
             msg = (
                 "No local SAM3 checkpoint was found. "
                 "Add a SAM3 checkpoint file (for example `sam3.pt`) next to the EMD, "
                 "under `segment-anything-3`, or reference it from the EMD with `ModelFile`."
             )
-            if local_sam1_ckpt is not None:
-                msg += (
-                    " Found local SAM1 weights at `{}', but those are incompatible with SAM3."
-                ).format(local_sam1_ckpt)
             raise Exception(msg)
 
         # map previous device_id to sam3 device string

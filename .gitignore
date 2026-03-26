@@ -9,6 +9,5 @@ sam3_*_overlay.png
 sam3_*_mask_union.png
 sam3_*_combined_overlay.png
 
-segment-anything/models/*.pth
 segment-anything-3/sam3/model/*.pt
 segment-anything-3/.git_disabled_for_parent_repo
