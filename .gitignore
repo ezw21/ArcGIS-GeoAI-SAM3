@@ -4,6 +4,7 @@ __pycache__/
 *.pyc
 
 sam3_arcgis_debug.log
+test_sam3.py
 sam3_runs/
 sam3_*_overlay.png
 sam3_*_mask_union.png
