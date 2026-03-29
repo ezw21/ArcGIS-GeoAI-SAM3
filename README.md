@@ -2,7 +2,7 @@
 
 This repository packages Meta's SAM 3 image segmentation model for use with ArcGIS Pro deep learning tools.
 
-It contains an ArcGIS Python raster function wrapper, an Esri model definition file, and a local copy of the upstream SAM 3 codebase. The wrapper exposes SAM 3 as an ArcGIS Pro model that can be called from `Detect Objects Using Deep Learning` and supports text prompts as a model argument.
+It contains an ArcGIS Python raster function wrapper, an Esri model definition file, a local copy of the upstream SAM 3 codebase, and vendored support modules under `lib/`. The wrapper exposes SAM 3 as an ArcGIS Pro model that can be called from `Detect Objects Using Deep Learning`, and `text_prompt` is available as an optional model argument.
 
 ## What Was Done
 
@@ -11,7 +11,9 @@ This repo adapts SAM 3 to the ArcGIS Pro deep learning runtime:
 - Added an ArcGIS raster function entrypoint in `SAM3.py`.
 - Added an Esri model definition in `SAM3.emd`.
 - Wired the raster function to the local SAM 3 package under `segment-anything-3/`.
-- Added support for `text_prompt` as an ArcGIS model parameter.
+- Kept the runtime self-contained by loading bundled code from `segment-anything-3/` and `lib/` instead of requiring extra packages in the conda environment.
+- Added `text_prompt` as an optional ArcGIS model parameter.
+- Removed Hugging Face checkpoint downloading so the model only uses local weights.
 - Updated the raster function class name to `SAM3` so ArcGIS can resolve the module and class name consistently.
 - Kept a compatibility alias `SAM` in the code so older callers do not break.
 - Removed the legacy SAM1 fallback and the unused `segment-anything` dependency.
@@ -24,6 +26,8 @@ This repo adapts SAM 3 to the ArcGIS Pro deep learning runtime:
   Esri model definition used by ArcGIS Pro.
 - `segment-anything-3/`
   Local copy of the upstream SAM 3 implementation.
+- `lib/`
+  Vendored support libraries used by the ArcGIS runtime and SAM 3 implementation.
 - `segment-anything-3/sam3/model/sam3.pt`
   Default model weight location expected by the EMD.
 
@@ -58,7 +62,7 @@ The raster function also searches a few local fallback locations if needed, incl
 - under `segment-anything-3/checkpoints/`
 - under `models/`
 
-If you want to use a different checkpoint location, update `ModelFile` in `SAM3.emd`.
+If you want to use a different checkpoint location, update `ModelFile` in `SAM3.emd`. The model weight should still stay on disk inside the repo or another local path that ArcGIS Pro can resolve at runtime.
 
 ## ArcGIS Pro Parameters
 
@@ -74,7 +78,7 @@ The wrapper exposes these model parameters to ArcGIS Pro:
 
 ### Text Prompt Support
 
-`text_prompt` is available as a model argument in ArcGIS Pro.
+`text_prompt` is available as an optional model argument in ArcGIS Pro.
 
 You can pass a single prompt:
 
@@ -89,6 +93,8 @@ text_prompt 'car, building'
 ```
 
 The raster function splits the string on commas, runs SAM 3 once per prompt, and writes the prompt text into the output `Class` field.
+
+If `text_prompt` is left blank, the runtime still runs and uses a generic `Segment` class label.
 
 ## Example ArcGIS Pro Usage
 
