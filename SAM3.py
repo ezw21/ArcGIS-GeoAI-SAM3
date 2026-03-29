@@ -1,7 +1,14 @@
 import json
 import sys, os, importlib
 from typing import Optional
-sys.path.append(os.path.dirname(__file__))
+
+MODULE_ROOT = os.path.dirname(__file__)
+LOCAL_LIB_ROOT = os.path.join(MODULE_ROOT, "lib")
+LOCAL_SAM3_ROOT = os.path.join(MODULE_ROOT, "segment-anything-3")
+
+for _local_path in (MODULE_ROOT, LOCAL_SAM3_ROOT, LOCAL_LIB_ROOT):
+    if os.path.isdir(_local_path) and _local_path not in sys.path:
+        sys.path.insert(0, _local_path)
 
 import numpy as np
 import math
@@ -44,6 +51,7 @@ def _resolve_local_sam3_checkpoint(json_info, model, model_as_file, prf_root_dir
     search_roots.extend(
         [
             prf_root_dir,
+            os.path.join(prf_root_dir, "lib"),
             os.path.join(prf_root_dir, "segment-anything-3"),
             os.path.join(prf_root_dir, "segment-anything-3", "sam3", "model"),
             os.path.join(prf_root_dir, "segment-anything-3", "checkpoints"),
@@ -431,6 +439,7 @@ class SAM3:
         #   sam3/sam3/                 (nested layout)
         #   sam3/                      (flat layout, sam3 is itself the package root)
         _sam3_parent_candidates = [
+            os.path.join(prf_root_dir, "lib"),
             os.path.join(prf_root_dir, "segment-anything-3"),
             os.path.join(prf_root_dir, "sam3"),
             prf_root_dir,

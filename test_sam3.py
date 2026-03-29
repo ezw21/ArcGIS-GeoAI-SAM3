@@ -11,11 +11,12 @@ import torch
 from PIL import Image
 from PIL import ImageColor
 
-from SAM import _mask_to_polygon_rings
+from SAM3 import _mask_to_polygon_rings
 
 
 WORKSPACE_ROOT = os.path.dirname(__file__)
 SAM3_REPO_ROOT = os.path.join(WORKSPACE_ROOT, "segment-anything-3")
+LOCAL_LIB_ROOT = os.path.join(WORKSPACE_ROOT, "lib")
 CHECKPOINT_PATH = os.path.join(SAM3_REPO_ROOT, "sam3", "model", "sam3.pt")
 OUTPUT_ROOT = Path(WORKSPACE_ROOT) / "sam3_runs"
 IMAGE_PATH = r"Z:\Data\Network_Waitaki_04_IMAGES\04_IMAGES\360\R0017247.jpg"
@@ -41,10 +42,12 @@ PROMPT_SPECS = [
 ]
 
 
-if SAM3_REPO_ROOT not in sys.path:
-    sys.path.insert(0, SAM3_REPO_ROOT)
+for _path in (WORKSPACE_ROOT, SAM3_REPO_ROOT, LOCAL_LIB_ROOT):
+    if os.path.isdir(_path) and _path not in sys.path:
+        sys.path.insert(0, _path)
 
 
+from SAM3 import _mask_to_polygon_rings
 from sam3.model_builder import build_sam3_image_model
 from sam3.model.sam3_image_processor import Sam3Processor
 

@@ -2,14 +2,30 @@
 
 # pyre-unsafe
 
-import os
-from typing import Optional
+from __future__ import annotations
 
-import pkg_resources
+import os
+from pathlib import Path
+from typing import Any, Optional
+
 import torch
 import torch.nn as nn
-from huggingface_hub import hf_hub_download
-from iopath.common.file_io import g_pathmgr
+
+try:
+    from huggingface_hub import hf_hub_download as _hf_hub_download
+except ImportError:
+    _hf_hub_download = None
+
+try:
+    from iopath.common.file_io import g_pathmgr as _g_pathmgr
+except ImportError:
+    _g_pathmgr = None
+
+
+def _open_checkpoint(checkpoint_path: str):
+    if _g_pathmgr is not None:
+        return _g_pathmgr.open(checkpoint_path, "rb")
+    return open(checkpoint_path, "rb")
 from sam3.model.decoder import (
     TransformerDecoder,
     TransformerDecoderLayer,
@@ -523,7 +539,7 @@ def _create_sam3_transformer(has_presence_token: bool = True) -> TransformerWrap
 
 def _load_checkpoint(model, checkpoint_path):
     """Load model checkpoint from file."""
-    with g_pathmgr.open(checkpoint_path, "rb") as f:
+    with _open_checkpoint(checkpoint_path) as f:
         ckpt = torch.load(f, map_location="cpu", weights_only=True)
     if "model" in ckpt and isinstance(ckpt["model"], dict):
         ckpt = ckpt["model"]
@@ -581,9 +597,7 @@ def build_sam3_image_model(
         A SAM3 image model
     """
     if bpe_path is None:
-        bpe_path = pkg_resources.resource_filename(
-            "sam3", "assets/bpe_simple_vocab_16e6.txt.gz"
-        )
+        bpe_path = str(Path(__file__).resolve().parent / "assets" / "bpe_simple_vocab_16e6.txt.gz")
 
     # Create visual components
     compile_mode = "default" if compile else None
@@ -640,11 +654,17 @@ def build_sam3_image_model(
 
 
 def download_ckpt_from_hf():
+    if _hf_hub_download is None:
+        raise ImportError(
+            "huggingface_hub is required only when downloading SAM3 checkpoints from Hugging Face. "
+            "Provide a local checkpoint_path to run from the bundled repo."
+        )
+
     SAM3_MODEL_ID = "facebook/sam3"
     SAM3_CKPT_NAME = "sam3.pt"
     SAM3_CFG_NAME = "config.json"
-    _ = hf_hub_download(repo_id=SAM3_MODEL_ID, filename=SAM3_CFG_NAME)
-    checkpoint_path = hf_hub_download(repo_id=SAM3_MODEL_ID, filename=SAM3_CKPT_NAME)
+    _ = _hf_hub_download(repo_id=SAM3_MODEL_ID, filename=SAM3_CFG_NAME)
+    checkpoint_path = _hf_hub_download(repo_id=SAM3_MODEL_ID, filename=SAM3_CKPT_NAME)
     return checkpoint_path
 
 
@@ -658,7 +678,7 @@ def build_sam3_video_model(
     apply_temporal_disambiguation: bool = True,
     device="cuda" if torch.cuda.is_available() else "cpu",
     compile=False,
-) -> "Sam3VideoInferenceWithInstanceInteractivity":
+) -> Any:
     """
     Build SAM3 dense tracking model.
 
@@ -672,9 +692,8 @@ def build_sam3_video_model(
     from sam3.model.sam3_video_inference import Sam3VideoInferenceWithInstanceInteractivity
 
     if bpe_path is None:
-        bpe_path = pkg_resources.resource_filename(
-            "sam3", "assets/bpe_simple_vocab_16e6.txt.gz"
-        )
+        bpe_path = str(Path(__file__).resolve().parent / "assets" / "bpe_simple_vocab_16e6.txt.gz")
+    assert bpe_path is not None
 
     # Build Tracker module
     tracker = build_tracker(apply_temporal_disambiguation=apply_temporal_disambiguation)
@@ -774,7 +793,7 @@ def build_sam3_video_model(
     if load_from_HF and checkpoint_path is None:
         checkpoint_path = download_ckpt_from_hf()
     if checkpoint_path is not None:
-        with g_pathmgr.open(checkpoint_path, "rb") as f:
+        with _open_checkpoint(checkpoint_path) as f:
             ckpt = torch.load(f, map_location="cpu", weights_only=True)
         if "model" in ckpt and isinstance(ckpt["model"], dict):
             ckpt = ckpt["model"]
