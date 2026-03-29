@@ -2,7 +2,7 @@
 
 This repository packages Meta's SAM 3 image segmentation model for use with ArcGIS Pro deep learning tools.
 
-It contains an ArcGIS Python raster function wrapper, an Esri model definition file, a local copy of the upstream SAM 3 codebase, and vendored support modules under `lib/`. The wrapper exposes SAM 3 as an ArcGIS Pro model that can be called from `Detect Objects Using Deep Learning`, and `text_prompt` is available as an optional model argument.
+It contains an ArcGIS Python raster function wrapper, an Esri model definition file, a local copy of the upstream SAM 3 codebase, and vendored support modules under `lib/`. The wrapper exposes SAM 3 as an ArcGIS Pro model that can be called from `Detect Objects Using Deep Learning`, with support for ArcGIS Pro NMS handling through the tool's `run_nms` setting and the model's `box_nms_thresh` parameter.
 
 ## What Was Done
 
@@ -12,7 +12,6 @@ This repo adapts SAM 3 to the ArcGIS Pro deep learning runtime:
 - Added an Esri model definition in `SAM3.emd`.
 - Wired the raster function to the local SAM 3 package under `segment-anything-3/`.
 - Kept the runtime self-contained by loading bundled code from `segment-anything-3/` and `lib/` instead of requiring extra packages in the conda environment.
-- Added `text_prompt` as an optional ArcGIS model parameter.
 - Removed Hugging Face checkpoint downloading so the model only uses local weights.
 - Updated the raster function class name to `SAM3` so ArcGIS can resolve the module and class name consistently.
 - Kept a compatibility alias `SAM` in the code so older callers do not break.
@@ -75,6 +74,8 @@ The wrapper exposes these model parameters to ArcGIS Pro:
 - `points_per_batch`
 - `stability_score_thresh`
 - `min_mask_region_area`
+
+The model supports NMS-aware postprocessing through ArcGIS Pro's `run_nms` option, while `box_nms_thresh` controls mask-level suppression inside the raster function.
 
 ### Text Prompt Support
 

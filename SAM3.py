@@ -652,6 +652,7 @@ class SAM3:
         ]
         # asdasd
         # optional text prompt for SAM3
+        
         required_parameters.append(
             {
                 "name": "text_prompt",
