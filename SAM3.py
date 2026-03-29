@@ -517,7 +517,6 @@ class SAM3:
         sam3_model = build_sam3_image_model(
             device=device_str,
             checkpoint_path=checkpoint_path,
-            load_from_HF=False,
         )
         # instantiate processor with a reasonable default confidence threshold
         self.processor = Sam3Processor(sam3_model, device=device_str, confidence_threshold=0.5)
