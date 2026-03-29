@@ -11,20 +11,8 @@ from typing import Any, Optional
 import torch
 import torch.nn as nn
 
-try:
-    from huggingface_hub import hf_hub_download as _hf_hub_download
-except ImportError:
-    _hf_hub_download = None
-
-try:
-    from iopath.common.file_io import g_pathmgr as _g_pathmgr
-except ImportError:
-    _g_pathmgr = None
-
 
 def _open_checkpoint(checkpoint_path: str):
-    if _g_pathmgr is not None:
-        return _g_pathmgr.open(checkpoint_path, "rb")
     return open(checkpoint_path, "rb")
 from sam3.model.decoder import (
     TransformerDecoder,
@@ -576,7 +564,6 @@ def build_sam3_image_model(
     device="cuda" if torch.cuda.is_available() else "cpu",
     eval_mode=True,
     checkpoint_path=None,
-    load_from_HF=True,
     enable_segmentation=True,
     enable_inst_interactivity=False,
     compile=False,
@@ -641,8 +628,6 @@ def build_sam3_image_model(
         inst_predictor,
         eval_mode,
     )
-    if load_from_HF and checkpoint_path is None:
-        checkpoint_path = download_ckpt_from_hf()
     # Load checkpoint if provided
     if checkpoint_path is not None:
         _load_checkpoint(model, checkpoint_path)
@@ -651,26 +636,8 @@ def build_sam3_image_model(
     model = _setup_device_and_mode(model, device, eval_mode)
 
     return model
-
-
-def download_ckpt_from_hf():
-    if _hf_hub_download is None:
-        raise ImportError(
-            "huggingface_hub is required only when downloading SAM3 checkpoints from Hugging Face. "
-            "Provide a local checkpoint_path to run from the bundled repo."
-        )
-
-    SAM3_MODEL_ID = "facebook/sam3"
-    SAM3_CKPT_NAME = "sam3.pt"
-    SAM3_CFG_NAME = "config.json"
-    _ = _hf_hub_download(repo_id=SAM3_MODEL_ID, filename=SAM3_CFG_NAME)
-    checkpoint_path = _hf_hub_download(repo_id=SAM3_MODEL_ID, filename=SAM3_CKPT_NAME)
-    return checkpoint_path
-
-
 def build_sam3_video_model(
     checkpoint_path: Optional[str] = None,
-    load_from_HF=True,
     bpe_path: Optional[str] = None,
     has_presence_token: bool = True,
     geo_encoder_use_img_cross_attn: bool = True,
@@ -790,8 +757,6 @@ def build_sam3_video_model(
         )
 
     # Load checkpoint if provided
-    if load_from_HF and checkpoint_path is None:
-        checkpoint_path = download_ckpt_from_hf()
     if checkpoint_path is not None:
         with _open_checkpoint(checkpoint_path) as f:
             ckpt = torch.load(f, map_location="cpu", weights_only=True)
