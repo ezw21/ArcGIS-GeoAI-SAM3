@@ -658,7 +658,6 @@ class SAM3:
                 "name": "text_prompt",
                 "dataType": "string",
                 "required": False,
-                "value": "",
                 "displayName": "Text Prompt",
                 "description": "Optional text prompt for SAM3 (e.g., 'boat', 'tree')",
             }
@@ -741,7 +740,7 @@ class SAM3:
             scalars.get("box_nms_thresh", 0.7)
         )
         # read optional text prompt
-        self.text_prompt = scalars.get("text_prompt", "")
+        self.text_prompt = scalars.get("text_prompt") or None
         (
             self.rectangle_height,
             self.rectangle_width,
